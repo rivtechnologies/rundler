@@ -18,14 +18,6 @@
 	path = crates/contracts/contracts/v0_6/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 	branch = release-v4.9
-[submodule "test/spec-tests/v0_6/bundler-spec-tests"]
-	path = test/spec-tests/v0_6/bundler-spec-tests
-	url = git@github.com:alchemyplatform/bundler-spec-tests.git
-	ignore = dirty
-[submodule "test/spec-tests/v0_7/bundler-spec-tests"]
-	path = test/spec-tests/v0_7/bundler-spec-tests
-	url = git@github.com:alchemyplatform/bundler-spec-tests.git
-	ignore = dirty
 [submodule "crates/bindings/fastlz/fastlz"]
 	path = crates/bindings/fastlz/fastlz
 	url = https://github.com/ariya/FastLZ
