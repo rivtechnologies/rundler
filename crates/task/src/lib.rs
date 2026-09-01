@@ -24,7 +24,7 @@ pub mod grpc;
 pub mod server;
 
 pub use reth_tasks::{
-    TaskSpawner, TaskSpawnerExt as RethTaskSpawnerExt, TokioTaskExecutor,
+    TaskManager, TaskSpawner, TaskSpawnerExt as RethTaskSpawnerExt, TokioTaskExecutor,
     shutdown::GracefulShutdown,
 };
 

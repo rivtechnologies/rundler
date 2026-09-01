@@ -39,10 +39,10 @@ use rundler_types::{
     v0_6, v0_7,
 };
 
-tonic::include_proto!("op_pool");
+include!("generated/op_pool.rs");
 
 pub const OP_POOL_FILE_DESCRIPTOR_SET: &[u8] =
-    tonic::include_file_descriptor_set!("op_pool_descriptor");
+    include_bytes!("generated/op_pool_descriptor.bin");
 
 impl From<&UserOperationVariant> for UserOperation {
     fn from(op: &UserOperationVariant) -> Self {

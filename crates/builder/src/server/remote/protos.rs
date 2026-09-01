@@ -14,10 +14,10 @@
 use rundler_task::grpc::protos::ConversionError;
 use rundler_types::builder::BundlingMode as RpcBundlingMode;
 
-tonic::include_proto!("builder");
+include!("generated/builder.rs");
 
 pub const BUILDER_FILE_DESCRIPTOR_SET: &[u8] =
-    tonic::include_file_descriptor_set!("builder_descriptor");
+    include_bytes!("generated/builder_descriptor.bin");
 
 impl From<RpcBundlingMode> for BundlingMode {
     fn from(mode: RpcBundlingMode) -> Self {

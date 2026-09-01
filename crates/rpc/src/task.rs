@@ -27,8 +27,8 @@ use rundler_task::{
     server::{HealthCheck, format_socket_addr},
 };
 use rundler_types::{
-    EntryPointAbiVersion, EntryPointVersion, builder::Builder as BuilderT, chain::ChainSpec,
-    pool::Pool as PoolT,
+    EntryPointAbiVersion, EntryPointVersion, SimulationAddressSeed, builder::Builder as BuilderT,
+    chain::ChainSpec, pool::Pool as PoolT,
 };
 use tracing::info;
 
@@ -83,6 +83,7 @@ pub struct RpcTask<Pool, Builder, Providers> {
     pool: Pool,
     builder: Builder,
     providers: Providers,
+    simulation_address_seed: SimulationAddressSeed,
 }
 
 impl<Pool, Builder, Providers> RpcTask<Pool, Builder, Providers> {
@@ -93,7 +94,17 @@ impl<Pool, Builder, Providers> RpcTask<Pool, Builder, Providers> {
             pool,
             builder,
             providers,
+            simulation_address_seed: SimulationAddressSeed::random(),
         }
+    }
+
+    /// Set the seed used to derive temporary simulation addresses.
+    pub const fn with_simulation_address_seed(
+        mut self,
+        simulation_address_seed: SimulationAddressSeed,
+    ) -> Self {
+        self.simulation_address_seed = simulation_address_seed;
+        self
     }
 }
 
@@ -103,14 +114,8 @@ where
     Builder: BuilderT + HealthCheck + Clone + 'static,
     Providers: ProvidersT + 'static,
 {
-    /// Spawns the RPC server task on the given task spawner.
-    pub async fn spawn<T>(self, task_spawner: T) -> anyhow::Result<()>
-    where
-        T: TaskSpawnerExt,
-    {
-        let addr: SocketAddr = format_socket_addr(&self.args.host, self.args.port).parse()?;
-        tracing::info!("Starting rpc server on {}", addr);
-
+    /// Builds the RPC module without binding a network listener.
+    pub fn build_rpc_module(&self) -> anyhow::Result<RpcModule<()>> {
         let mut router_builder = EntryPointRouterBuilder::default();
 
         for ep_version in &self.args.enabled_entry_points {
@@ -124,12 +129,13 @@ where
 
                     router_builder = router_builder.add_route(EntryPointRouteImpl::new(
                         ep.clone(),
-                        GasEstimatorV0_6::new(
+                        GasEstimatorV0_6::new_with_simulation_address_seed(
                             self.args.chain_spec.clone(),
                             self.providers.evm().clone(),
                             ep.clone(),
                             self.args.estimation_settings,
                             self.providers.fee_estimator().clone(),
+                            self.simulation_address_seed,
                         ),
                         UserOperationEventProviderV0_6::new(
                             self.args.chain_spec.clone(),
@@ -150,18 +156,19 @@ where
                         .ep_v0_7(*ep_version)
                         .clone()
                         .context(format!(
-                        "entry point abi v0.7 provider not supplied for entry point version: {:?}",
-                        ep_version
-                    ))?;
+                            "entry point abi v0.7 provider not supplied for entry point version: {:?}",
+                            ep_version
+                        ))?;
 
                     router_builder = router_builder.add_route(EntryPointRouteImpl::new(
                         ep.clone(),
-                        GasEstimatorV0_7::new(
+                        GasEstimatorV0_7::new_with_simulation_address_seed(
                             self.args.chain_spec.clone(),
                             self.providers.evm().clone(),
                             ep.clone(),
                             self.args.estimation_settings,
                             self.providers.fee_estimator().clone(),
+                            self.simulation_address_seed,
                         ),
                         UserOperationEventProviderV0_7::new(
                             self.args.chain_spec.clone(),
@@ -179,9 +186,7 @@ where
             }
         }
 
-        // create the entry point router
         let router = router_builder.build();
-
         let mut module = RpcModule::new(());
         self.attach_namespaces(
             self.args.eth_api_settings.permissions_enabled,
@@ -192,8 +197,19 @@ where
 
         let servers: Vec<Box<dyn HealthCheck>> =
             vec![Box::new(self.pool.clone()), Box::new(self.builder.clone())];
-        let health_checker = HealthChecker::new(servers);
-        module.merge(health_checker.into_rpc())?;
+        module.merge(HealthChecker::new(servers).into_rpc())?;
+
+        Ok(module)
+    }
+
+    /// Spawns the RPC server task on the given task spawner.
+    pub async fn spawn<T>(self, task_spawner: T) -> anyhow::Result<()>
+    where
+        T: TaskSpawnerExt,
+    {
+        let addr: SocketAddr = format_socket_addr(&self.args.host, self.args.port).parse()?;
+        tracing::info!("Starting rpc server on {}", addr);
+        let module = self.build_rpc_module()?;
 
         // Set up health check endpoint via GET /health registers the jsonrpc handler
         let http_middleware = tower::ServiceBuilder::new()

@@ -118,6 +118,11 @@ pub enum SigningScheme {
 }
 
 impl SigningScheme {
+    /// Creates a signing scheme backed by local private keys.
+    pub fn private_keys(private_keys: Vec<SecretString>) -> Self {
+        Self::PrivateKeys { private_keys }
+    }
+
     /// Returns true if the signing scheme supports funding
     pub fn supports_funding(&self) -> bool {
         matches!(self, SigningScheme::KmsFunding { .. })

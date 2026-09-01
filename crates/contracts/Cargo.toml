@@ -13,7 +13,3 @@ alloy-primitives.workspace = true
 alloy-sol-macro = { workspace = true, features = ["json"] }
 alloy-sol-types.workspace = true
 const-hex.workspace = true
-
-[build-dependencies]
-serde_json.workspace = true
-

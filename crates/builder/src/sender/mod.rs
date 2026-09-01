@@ -90,6 +90,32 @@ pub(crate) trait TransactionSender: Send + Sync {
     ) -> Result<CancelTxInfo>;
 }
 
+#[async_trait::async_trait]
+impl<T: TransactionSender + ?Sized> TransactionSender for Box<T> {
+    async fn send_transaction(
+        &self,
+        tx: TransactionRequest,
+        expected_storage: &ExpectedStorage,
+        signer: &SignerLease,
+    ) -> Result<B256> {
+        (**self)
+            .send_transaction(tx, expected_storage, signer)
+            .await
+    }
+
+    async fn cancel_transaction(
+        &self,
+        tx_hash: B256,
+        nonce: u64,
+        gas_fees: GasFees,
+        signer: &SignerLease,
+    ) -> Result<CancelTxInfo> {
+        (**self)
+            .cancel_transaction(tx_hash, nonce, gas_fees, signer)
+            .await
+    }
+}
+
 #[enum_dispatch(TransactionSender)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum TransactionSenderEnum<P: EvmProvider> {
@@ -179,6 +205,24 @@ impl TransactionSenderArgs {
             ),
         };
         Ok(sender)
+    }
+
+    pub(crate) fn into_sender_with_provider<P: EvmProvider>(
+        self,
+        provider: P,
+    ) -> std::result::Result<TransactionSenderEnum<P>, SenderConstructorErrors> {
+        Ok(match self {
+            Self::Raw(args) => TransactionSenderEnum::Raw(RawTransactionSender::new(
+                provider,
+                args.use_conditional_rpc,
+            )),
+            Self::Flashbots(args) => TransactionSenderEnum::Flashbots(
+                FlashbotsTransactionSender::new(args.auth_key, args.builders, args.relay_url)?,
+            ),
+            Self::Bloxroute(args) => TransactionSenderEnum::PolygonBloxroute(
+                PolygonBloxrouteTransactionSender::new(provider, &args.header)?,
+            ),
+        })
     }
 }
 

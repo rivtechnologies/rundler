@@ -42,7 +42,7 @@ use crate::{
     bundle_proposer::{self, BundleProposerImpl, BundleProposerProviders},
     bundle_sender::{self, BundleSender, BundleSenderAction, BundleSenderImpl},
     emit::BuilderEvent,
-    sender::TransactionSenderArgs,
+    sender::{TransactionSender, TransactionSenderArgs},
     server::{self, LocalBuilderBuilder},
     transaction_tracker::{self, TransactionTrackerImpl},
 };
@@ -129,16 +129,17 @@ pub struct EntryPointBuilderSettings {
 }
 
 /// Builder task
-pub struct BuilderTask<Pool, Providers> {
+pub struct BuilderTask<Pool, Providers: ProvidersT> {
     args: Args,
     event_sender: broadcast::Sender<WithEntryPoint<BuilderEvent>>,
     builder_builder: LocalBuilderBuilder,
     pool: Pool,
     providers: Providers,
     signer_manager: Arc<dyn SignerManager>,
+    submission_provider: Option<Providers::Evm>,
 }
 
-impl<Pool, Providers> BuilderTask<Pool, Providers> {
+impl<Pool, Providers: ProvidersT> BuilderTask<Pool, Providers> {
     /// Create a new builder task
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -156,7 +157,14 @@ impl<Pool, Providers> BuilderTask<Pool, Providers> {
             pool,
             providers,
             signer_manager,
+            submission_provider: None,
         }
+    }
+
+    /// Uses an existing provider for bundle submission instead of opening a separate transport.
+    pub fn with_submission_provider(mut self, provider: Providers::Evm) -> Self {
+        self.submission_provider = Some(provider);
+        self
     }
 }
 
@@ -425,11 +433,22 @@ where
             submission_proxy: submission_proxy.cloned(),
         };
 
-        let transaction_sender = self
-            .args
-            .sender_args
-            .clone()
-            .into_sender(&self.args.alloy_network_config)?;
+        let transaction_sender: Box<dyn TransactionSender> =
+            if let Some(provider) = self.submission_provider.clone() {
+                Box::new(
+                    self.args
+                        .sender_args
+                        .clone()
+                        .into_sender_with_provider(provider)?,
+                )
+            } else {
+                Box::new(
+                    self.args
+                        .sender_args
+                        .clone()
+                        .into_sender(&self.args.alloy_network_config)?,
+                )
+            };
 
         let tracker_settings = transaction_tracker::Settings {
             replacement_fee_percent_increase: self.args.replacement_fee_percent_increase,

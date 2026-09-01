@@ -52,6 +52,9 @@ pub use user_operation::*;
 mod storage;
 pub use storage::*;
 
+mod simulation;
+pub use simulation::SimulationAddressSeed;
+
 mod validation_results;
 pub use validation_results::{
     AggregatorInfo, StakeInfo, ValidationOutput, ValidationReturnInfo, ValidationRevert,

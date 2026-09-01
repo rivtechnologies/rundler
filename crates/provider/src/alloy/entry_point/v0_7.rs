@@ -38,8 +38,8 @@ use rundler_contracts::{
     v0_9::ENTRY_POINT_SIMULATIONS_V0_9_DEPLOYED_BYTECODE,
 };
 use rundler_types::{
-    EntryPointVersion, GasFees, UserOperation as _, UserOpsPerAggregator, ValidationOutput,
-    ValidationRevert,
+    EntryPointVersion, GasFees, SimulationAddressSeed, UserOperation as _, UserOpsPerAggregator,
+    ValidationOutput, ValidationRevert,
     authorization::Eip7702Auth,
     chain::ChainSpec,
     constants::SIMULATION_SENDER,
@@ -67,6 +67,7 @@ pub struct EntryPointProvider<AP, D> {
     max_aggregation_gas: u64,
     chain_spec: ChainSpec,
     ep_version: EntryPointVersion,
+    simulation_address_seed: SimulationAddressSeed,
 }
 
 impl<AP, D> EntryPointProvider<AP, D>
@@ -102,7 +103,17 @@ where
             max_aggregation_gas,
             chain_spec,
             ep_version,
+            simulation_address_seed: SimulationAddressSeed::random(),
         }
+    }
+
+    /// Set the seed used to derive temporary simulation addresses.
+    pub const fn with_simulation_address_seed(
+        mut self,
+        simulation_address_seed: SimulationAddressSeed,
+    ) -> Self {
+        self.simulation_address_seed = simulation_address_seed;
+        self
     }
 }
 
@@ -148,7 +159,9 @@ where
 
     #[instrument(skip_all)]
     async fn get_balances(&self, addresses: Vec<Address>) -> ProviderResult<Vec<U256>> {
-        let helper_addr = Address::random();
+        let helper_addr = self
+            .simulation_address_seed
+            .address(b"rundler.provider.v0_7.get_balances");
         let helper = GetEntryPointBalances::new(helper_addr, self.i_entry_point.provider());
         let mut overrides = StateOverride::default();
         let account = AccountOverride {
@@ -442,7 +455,11 @@ where
 
         let txn_req = self
             .i_entry_point
-            .handleOps(vec![user_op.pack()], Address::random())
+            .handleOps(
+                vec![user_op.pack()],
+                self.simulation_address_seed
+                    .address(b"rundler.provider.v0_7.da_beneficiary"),
+            )
             .from(SIMULATION_SENDER)
             .into_transaction_request();
 

@@ -30,7 +30,7 @@ use rundler_provider::{
     StateOverride,
 };
 use rundler_types::{
-    self, GasEstimate, UserOperation as _,
+    self, GasEstimate, SimulationAddressSeed, UserOperation as _,
     chain::ChainSpec,
     v0_6::{UserOperation, UserOperationBuilder, UserOperationOptionalGas},
 };
@@ -230,23 +230,45 @@ where
         settings: Settings,
         fee_estimator: F,
     ) -> Self {
+        Self::new_with_simulation_address_seed(
+            chain_spec,
+            provider,
+            entry_point,
+            settings,
+            fee_estimator,
+            SimulationAddressSeed::random(),
+        )
+    }
+
+    /// Create a new gas estimator with a fixed temporary-address seed.
+    pub fn new_with_simulation_address_seed(
+        chain_spec: ChainSpec,
+        provider: P,
+        entry_point: E,
+        settings: Settings,
+        fee_estimator: F,
+        simulation_address_seed: SimulationAddressSeed,
+    ) -> Self {
         if let Some(err) = settings.validate() {
             panic!("Invalid gas estimator settings: {}", err);
         }
 
-        let verification_gas_estimator = VerificationGasEstimatorImpl::new(
-            chain_spec.clone(),
-            settings,
-            provider.clone(),
-            VerificationGasEstimatorSpecializationV06 {
-                entry_point: entry_point.clone(),
-            },
-        );
+        let verification_gas_estimator =
+            VerificationGasEstimatorImpl::new_with_simulation_address_seed(
+                chain_spec.clone(),
+                settings,
+                provider.clone(),
+                VerificationGasEstimatorSpecializationV06 {
+                    entry_point: entry_point.clone(),
+                },
+                simulation_address_seed,
+            );
         let call_gas_estimator = CallGasEstimatorImpl::new(
             entry_point.clone(),
             settings,
             CallGasEstimatorSpecializationV06 {
                 chain_spec: chain_spec.clone(),
+                simulation_address_seed,
             },
         );
         Self {
@@ -378,6 +400,7 @@ where
 #[derive(Debug, Clone)]
 pub struct CallGasEstimatorSpecializationV06 {
     chain_spec: ChainSpec,
+    simulation_address_seed: SimulationAddressSeed,
 }
 
 impl CallGasEstimatorSpecialization for CallGasEstimatorSpecializationV06 {
@@ -386,10 +409,9 @@ impl CallGasEstimatorSpecialization for CallGasEstimatorSpecializationV06 {
     fn add_proxy_to_overrides(&self, ep_to_override: Address, state_override: &mut StateOverride) {
         // For an explanation of what's going on here, see the comment at the
         // top of `CallGasEstimationProxy.sol`.
-        // Use a random address for the moved entry point so that users can't
-        // intentionally get bad estimates by interacting with the hardcoded
-        // address.
-        let moved_entry_point_address = Address::random();
+        let moved_entry_point_address = self
+            .simulation_address_seed
+            .address(b"rundler.estimation.v0_6.moved_entry_point");
         state_override.insert(
             moved_entry_point_address,
             AccountOverride {

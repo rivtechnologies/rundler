@@ -28,7 +28,7 @@ use rundler_contracts::utils::{
     GetGasUsed::{self, GasUsedResult},
     StorageLoader,
 };
-use rundler_types::ExpectedStorage;
+use rundler_types::{ExpectedStorage, SimulationAddressSeed};
 use serde_json::json;
 use tracing::instrument;
 
@@ -41,12 +41,24 @@ use crate::{
 #[derive(Clone)]
 pub struct AlloyEvmProvider<AP> {
     inner: AP,
+    simulation_address_seed: SimulationAddressSeed,
 }
 
 impl<AP> AlloyEvmProvider<AP> {
     /// Create a new `AlloyEvmProvider`
     pub fn new(inner: AP) -> Self {
-        Self { inner }
+        Self::new_with_simulation_address_seed(inner, SimulationAddressSeed::random())
+    }
+
+    /// Create a new `AlloyEvmProvider` with an injectable simulation address seed.
+    pub fn new_with_simulation_address_seed(
+        inner: AP,
+        simulation_address_seed: SimulationAddressSeed,
+    ) -> Self {
+        Self {
+            inner,
+            simulation_address_seed,
+        }
     }
 }
 
@@ -260,7 +272,9 @@ where
             mut state_override,
         } = call;
 
-        let helper_addr = Address::random();
+        let helper_addr = self
+            .simulation_address_seed
+            .address(b"rundler.provider.get_gas_used");
         let helper = GetGasUsed::new(helper_addr, &self.inner);
 
         let account = AccountOverride {
@@ -325,7 +339,9 @@ where
         mut addresses: Vec<Address>,
         block: Option<BlockId>,
     ) -> ProviderResult<B256> {
-        let helper_addr = Address::random();
+        let helper_addr = self
+            .simulation_address_seed
+            .address(b"rundler.provider.get_code_hashes");
         let helper = GetCodeHashesInstance::new(helper_addr, &self.inner);
 
         let mut overrides = StateOverride::default();
@@ -347,7 +363,9 @@ where
 
     #[instrument(skip(self))]
     async fn get_balances(&self, addresses: Vec<Address>) -> ProviderResult<Vec<(Address, U256)>> {
-        let helper_addr = Address::random();
+        let helper_addr = self
+            .simulation_address_seed
+            .address(b"rundler.provider.get_balances");
         let helper = GetBalancesInstance::new(helper_addr, &self.inner);
 
         let mut overrides = StateOverride::default();

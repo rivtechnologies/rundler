@@ -16,7 +16,9 @@ use std::{future::Future, pin::Pin};
 use alloy_primitives::{Address, B256, Bytes, U256};
 use async_trait::async_trait;
 use rundler_provider::{EvmProvider, StateOverride, TransactionBuilder, TransactionRequest};
-use rundler_types::{UserOperation, chain::ChainSpec, constants::SIMULATION_SENDER};
+use rundler_types::{
+    SimulationAddressSeed, UserOperation, chain::ChainSpec, constants::SIMULATION_SENDER,
+};
 use rundler_utils::authorization_utils;
 use tracing::instrument;
 
@@ -73,6 +75,7 @@ pub struct VerificationGasEstimatorImpl<S, P> {
     settings: Settings,
     specialization: S,
     provider: P,
+    simulation_address_seed: SimulationAddressSeed,
 }
 
 #[async_trait]
@@ -94,7 +97,9 @@ where
             authorization_utils::apply_7702_overrides(&mut state_override, op.sender(), au.address);
         }
 
-        let helper_addr = Address::random();
+        let helper_addr = self
+            .simulation_address_seed
+            .address(b"rundler.estimation.verification_proxy");
         self.specialization
             .add_proxy_to_overrides(helper_addr, &mut state_override);
 
@@ -146,11 +151,29 @@ where
 {
     /// Create a new instance
     pub fn new(chain_spec: ChainSpec, settings: Settings, provider: P, specialization: S) -> Self {
+        Self::new_with_simulation_address_seed(
+            chain_spec,
+            settings,
+            provider,
+            specialization,
+            SimulationAddressSeed::random(),
+        )
+    }
+
+    /// Create a new instance with a fixed temporary-address seed.
+    pub fn new_with_simulation_address_seed(
+        chain_spec: ChainSpec,
+        settings: Settings,
+        provider: P,
+        specialization: S,
+        simulation_address_seed: SimulationAddressSeed,
+    ) -> Self {
         Self {
             chain_spec,
             settings,
             provider,
             specialization,
+            simulation_address_seed,
         }
     }
 

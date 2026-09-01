@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 
 alloy-eips.workspace = true
-alloy-primitives.workspace = true
+alloy-primitives = { workspace = true, features = ["rand"] }
 alloy-sol-types.workspace = true
 
 anyhow.workspace = true

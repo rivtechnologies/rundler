@@ -22,12 +22,16 @@
     attr(deny(warnings, rust_2018_idioms), allow(dead_code, unused_variables))
 ))]
 
-use core::ffi::c_void;
+use core::ffi::{c_int, c_void};
 
-// This is a generated binding of the fastlz C library at commit
-// 344eb4025f9ae866ebf7a2ec48850f7113a97a42 as required by the fastlz implementation by
-// solady's LibZip.sol here: https://github.com/Vectorized/solady/blob/8b0601e1573ed17a583fdab2b2ebfb895507ec15/src/utils/LibZip.sol#L19
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+unsafe extern "C" {
+    fn fastlz_compress_level(
+        level: c_int,
+        input: *const c_void,
+        length: c_int,
+        output: *mut c_void,
+    ) -> c_int;
+}
 
 /// Compress a block of data in the input buffer and returns the size of
 /// compressed block. The size of input buffer is specified by length. The
